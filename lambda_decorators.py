@@ -146,6 +146,7 @@ import json
 import logging
 import boto3
 from functools import wraps, update_wrapper
+from inspect import getargspec
 
 try:
     import asyncio
@@ -218,17 +219,19 @@ class LambdaDecorator(object):
 
     def __call__(self, event, context):
         try:
-            return self.after(self.handler(*self.before(event, context)))
+            return self.after(
+                self.handler(*self.before(event, context)), event, context
+            )
         except Exception as exception:
-            return self.on_exception(exception)
+            return self.on_exception(exception, event, context)
 
     def before(self, event, context):
         return event, context
 
-    def after(self, retval):
+    def after(self, retval, event, context):
         return retval
 
-    def on_exception(self, exception):
+    def on_exception(self, exception, event, context):
         raise exception
 
 
@@ -286,10 +289,18 @@ def after(func):
     """
 
     class AfterDecorator(LambdaDecorator):
-        def after(self, retval):
+        def after(self, retval, event, context):
             return func(retval)
 
-    return AfterDecorator
+    class AfterDecoratorContext(LambdaDecorator):
+        def after(self, retval, event, context):
+            return func(retval, event, context)
+
+    if len(getargspec(func).args) == 1:
+        return AfterDecorator
+    if len(getargspec(func).args) == 3:
+        return AfterDecoratorContext
+    raise "Invalid number of arguments in decorated function"
 
 
 def on_exception(func):
@@ -319,10 +330,18 @@ def on_exception(func):
     """
 
     class OnExceptionDecorator(LambdaDecorator):
-        def on_exception(self, exception):
+        def on_exception(self, exception, event, context):
             return func(exception)
 
-    return OnExceptionDecorator
+    class OnExceptionDecoratorContext(LambdaDecorator):
+        def on_exception(self, exception, event, context):
+            return func(exception, event, context)
+
+    if len(getargspec(func).args) == 1:
+        return OnExceptionDecorator
+    if len(getargspec(func).args) == 3:
+        return OnExceptionDecoratorContext
+    raise "Invalid number of arguments in decorated function"
 
 
 def async_handler(handler):
@@ -504,18 +523,16 @@ in this example, the decorated handler returns:
                 try:
                     resp = handler(event, context)
                     if isinstance(resp, dict):
-                        status = resp.pop('statusCode', 200)
+                        status = resp.pop("statusCode", 200)
                     else:
                         status = 200
                     if isinstance(resp, dict):
-                        headers = resp.pop('headers', None)
+                        headers = resp.pop("headers", None)
                     else:
                         headers = None
                     http_resp = {
                         "statusCode": status,
-                        "body": json.dumps(
-                            resp, **json_dumps_kwargs
-                        ),
+                        "body": json.dumps(resp, **json_dumps_kwargs),
                     }
                     if headers:
                         http_resp["headers"] = headers
