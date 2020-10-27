@@ -2,7 +2,7 @@ from setuptools import setup
 
 import lambda_decorators
 
-long_description = open('README.rst').read()
+#long_description = open('README.rst').read()
 
 setup(
     name='lambda-decorators',
@@ -10,7 +10,7 @@ setup(
     version=lambda_decorators.__version__,
 
     description='A collection of useful decorators for making AWS Lambda handlers',
-    long_description=long_description,
+    long_description='',
 
     url='http://lambda-decorators.readthedocs.io',
 
